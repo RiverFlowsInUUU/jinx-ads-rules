@@ -2,6 +2,8 @@
 
 把 **Jinx**（iOS 去广告 App）的远程黑/白名单，转换成 **mihomo（含 OpenClash）** 与 **Surge** 可直接引用的规则文件。
 
+产出这些文件的转换脚本与完整方法论一并放在 [`skill/`](./skill) 目录，可自行复现（见 §七）。
+
 > ⚠️ **本仓库是格式转换产物，不是原创规则。** 数据全部来自上游仓库 `VME98/jinx-rules`（下称"上游"），本仓库只做**语法翻译**，不新增、不修改任何一条规则内容。
 
 ---
@@ -171,7 +173,7 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 
 ## 六、数据来源与转换规则
 
-`version.json`（上游原文）：
+`version.json`（上游 `rules/version.json`）：
 
 ```json
 { "version": "3.1.9",
@@ -200,34 +202,58 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 
 ---
 
-## 七、重新生成
+## 七、重新生成（脚本随仓库提供）
 
-上游更新后，用配套脚本重跑：
+本仓库的规则**不是手工维护的死快照**——产出它们的脚本与完整方法论一并放在 `skill/` 目录下：
+
+| 路径 | 内容 |
+|---|---|
+| `skill/SKILL.md` | 完整方法论：匹配语义判定、三平台通配映射表、差集逻辑、白名单瘦身、托管规范、踩坑记录 |
+| `skill/scripts/convert_ruleset.py` | 转换主脚本（本仓库 6 个文件全部由它产出） |
+| `skill/scripts/upload_to_github.py` | 批量建库/上传辅助脚本（纯 GitHub API，无需 git / gh CLI） |
+
+**① 取源文件**（上游默认分支 `master`，文件在 `rules/` 下）
 
 ```bash
-# 黑名单：完整版（suffix 语义）
-python convert_ruleset.py --src ./jinx-rules --out ./out \
-    --fixed blacklist.txt --wild blacklist_wildcard.txt \
-    --tag ads --mode suffix
+mkdir -p jinx-rules && cd jinx-rules
+for f in blacklist.txt blacklist_wildcard.txt whitelist.txt whitelist_wildcard.txt version.json; do
+  curl -fsSLO "https://raw.githubusercontent.com/VME98/jinx-rules/master/rules/$f"
+done
+cd ..
+```
 
-# 黑名单：差集版（只剔除被 AWAvenue 深度覆盖的）
-python convert_ruleset.py --src ./jinx-rules --out ./out \
-    --fixed blacklist.txt --wild blacklist_wildcard.txt \
-    --tag ads-delta --mode suffix \
+**② 生成**（六条命令，产出全部 6 个文件）
+
+```bash
+SK=skill/scripts/convert_ruleset.py
+
+# 黑名单：完整版（suffix 语义）→ mihomo-ads.list / surge-ads.list
+python $SK --src ./jinx-rules --out ./out --fixed blacklist.txt --wild blacklist_wildcard.txt \
+    --tag ads --mode suffix --naming repo
+
+# 黑名单：差集版 → mihomo-ads-delta.list / surge-ads-delta.list
+python $SK --src ./jinx-rules --out ./out --fixed blacklist.txt --wild blacklist_wildcard.txt \
+    --tag ads-delta --mode suffix --naming repo \
     --delta-ref https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Clash-Classical.yaml
 
-# 白名单：精简 guard（exact 语义）
-python convert_ruleset.py --src ./jinx-rules --out ./out \
-    --fixed whitelist.txt --wild whitelist_wildcard.txt \
-    --tag white-guard --mode exact \
+# 白名单：精简 guard（exact 语义）→ mihomo-white-guard.list / surge-white-guard.list
+python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist_wildcard.txt \
+    --tag white-guard --mode exact --naming repo \
     --guard-against-fixed blacklist.txt --guard-against-wild blacklist_wildcard.txt
 ```
+
+**`--naming repo` 是关键**：让输出文件名与仓库现有文件完全一致（`mihomo-ads.list` / `surge-ads.list`…），可直接覆盖上传，客户端 URL 不用改。省略它则输出社区通用命名 `mihomo-ads-classical.list` / `surge-ads-ruleset.list`。
+
+> ✅ **已实测**：用本节的命令从上游 3.1.9 重跑，产出的 `mihomo-ads.list` / `surge-ads.list` 与仓库现有文件**逐字节一致**（剔除注释行后 `diff` 为空，各 3888 条）。
+
+上游更新后的完整流程就是：重跑 → 覆盖仓库同名文件 → （如删过文件才需要）purge jsDelivr 缓存。
 
 ---
 
 ## 八、许可与免责
 
 - 规则数据版权归上游 `VME98/jinx-rules` 及其原始来源（多来源合并，不逐一可考）。本仓库**不主张任何权利**、不声明 License。
+- **数据与工具分开看**：`skill/` 目录下的转换脚本与方法论文档是本仓库自带的工具，**不含任何上游数据**，可自由取用、修改、再分发；上面"不主张许可"只针对根目录的规则数据，不约束 `skill/`。
 - 本仓库仅提供格式转换结果，**不对拦截效果与误杀后果作任何保证**。
 - `DOMAIN-SUFFIX` 会拦截整个子域树，请自行评估对自有服务的影响；必要时用白名单放行。
 - 若上游作者或任何权利人要求，本仓库将立即删除。
@@ -268,5 +294,7 @@ python convert_ruleset.py --src ./jinx-rules --out ./out \
 | `mihomo-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-white-guard.list> |
 | `surge-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-white-guard.list> |
 
-> **仓库只保留以上 6 个规则文件。** 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
+> **仓库结构**：根目录只保留以上 **6 个规则文件 + `README.md`**；另有 `skill/` 目录（转换脚本 + 方法论文档），**不参与规则引用**，见 §七。
+>
+> 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
 > **如果你的客户端仍引用着这些旧地址，请立即换成本表上方的新文件名**——旧地址现已 404，会导致规则集拉取失败。
