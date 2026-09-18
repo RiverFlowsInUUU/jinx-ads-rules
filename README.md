@@ -1,255 +1,170 @@
-# Jinx Ads Rules —— 给 mihomo / Surge 用的转换版规则集
+# jinx-ads-rules
 
-把 iOS 去广告 App **Jinx**（极简广告拦截与隐私保护）的黑名单，翻译成 **mihomo（Clash.Meta / OpenClash）** 与 **Surge** 可以直接引用的规则集格式。
+把 **Jinx**（iOS 去广告 App）的远程黑/白名单，转换成 **mihomo（含 OpenClash）** 与 **Surge** 可直接引用的规则文件。
 
-## ⚠️ 先读这段
-
-- **本仓库不是 Jinx 官方项目**，与 Jinx App 开发者无关。
-- **本仓库不包含任何原创规则内容。** 全部域名数据来自上游开源仓库 **[`VME98/jinx-rules`](https://github.com/VME98/jinx-rules)**（Jinx 的远程规则仓库，本版对应上游 `version.json` 里的 **3.1.9**）。数据权利归上游作者所有。
-- 本仓库唯一做的事情是：**语法翻译**（Jinx 的 glob 通配 → mihomo / Surge 的等价写法）**＋ 格式整理**。
-- 上游仓库**没有声明任何开源许可**（`license: null`）。因此本仓库同样不主张任何许可，也不提供任何担保。如果你是上游作者、不希望这些转换产物被分发，提一个 issue，我会立即下架。
-- 广告规则本质是"猜测 + 经验"，**误杀是常态**。上线前请先小范围验证，出问题先看第五节和第六节。
+> ⚠️ **本仓库是格式转换产物，不是原创规则。** 数据全部来自上游仓库 `VME98/jinx-rules`（下称"上游"），本仓库只做**语法翻译**，不新增、不修改任何一条规则内容。
 
 ---
 
-## 目录
+## ⚠️ 先读这段：来源与许可
 
-- [一、先选文件](#一先选文件)
-- [二、mihomo / OpenClash 怎么配](#二mihomo--openclash-怎么配)
-- [三、Surge 怎么配](#三surge-怎么配)
-- [四、为什么顺序是生死线](#四为什么顺序是生死线)
-- [五、白名单：为什么推荐只用 42 条那份](#五白名单为什么推荐只用-42-条那份)
-- [六、已知坑](#六已知坑)
-- [七、数据来源与转换规则](#七数据来源与转换规则)
-- [八、上游更新后怎么重新生成](#八上游更新后怎么重新生成)
-- [九、许可与免责](#九许可与免责)
+| 项 | 说明 |
+|---|---|
+| 上游仓库 | <https://github.com/VME98/jinx-rules> |
+| 数据版本 | `version.json` → `3.1.9`，`lastUpdate: 2026-09-15T14:35:01Z` |
+| 上游许可 | **`license: null`（未声明任何 License）** |
+| 本仓库许可 | **同样不主张任何许可**。这是对公开数据的格式翻译，不是我的作品，我不会给它套任何开源协议 |
+| 下架承诺 | 上游作者若认为不妥，开 issue 或联系我，**立刻删除本仓库** |
+| 再分发建议 | 你要是想用，建议直接引用**上游原始地址**；本仓库只是替你省掉"转换"这一步 |
+
+为什么要写这么重：上游没写 License 的数据，正确做法是**照实标注来源、不据为己有、留好下架通道**，而不是假装它是无主的、更不能套个 MIT 就说是自己的。
+
+---
+
+## 🔴 v2 修正说明（2026-09-19）
+
+**如果你在 2026-09-19 之前引用过本仓库，请务必换成下面的新文件。**
+
+v1 的转换有一个**语义错误**：把 Jinx 的普通域名条目转成了 `DOMAIN,`（**精确匹配**）。但 Jinx 的实际行为是**后缀匹配**——列表里写 `bugly.qq.com`，它会连 `ios.bugly.qq.com` 一起拦。
+
+实测证据（同一份 Jinx 日志，30 条被拦域名）：
+
+| 规则版本 | 覆盖率 | 漏掉的 |
+|---|---|---|
+| v1（`DOMAIN,` 精确） | 28 / 30 = 93% | `sdkquic.e.qq.com`（靠条目 `e.qq.com`）、`ios.bugly.qq.com`（靠条目 `bugly.qq.com`） |
+| **v2（`DOMAIN-SUFFIX,`）** | **30 / 30 = 100%** | 无 |
+
+v2 同时修正了：
+
+1. 普通条目 → `DOMAIN-SUFFIX`（黑名单语义），**不是** `DOMAIN`
+2. 白名单 → 保持 `DOMAIN`（**精确**语义）。实测 Jinx 白名单含 `qq.com`，但 `sdk.e.qq.com` 仍被拦 → 白名单**不**向下继承子域。若误用后缀语义，`qq.com` / `baidu.com` / `taobao.com` 会整片放行广告域
+3. 3 条混进来的 URL 脏数据（`https://us.l.qq.com/exapp` 等）→ 还原为 host 保留，不再丢弃
+4. 差集只剔除被参照规则集**深度覆盖**（后缀/关键词）的条目，不再因为对方有一条精确规则就整条丢掉
+
+**v1 的 `*-domain.list` / `*-domainset.txt` 变体已废弃**（既丢中缀通配，又有精确匹配问题），请不要再引用。
 
 ---
 
 ## 一、先选文件
 
-### 第 1 步：你有没有在用别的广告规则集？
+**判断标准只有一条：你的客户端里有没有同时跑 `AWAvenue-Ads-Rule`？**
 
-| 你的情况 | 用哪个 | 为什么 |
+| 你的情况 | mihomo 用 | Surge 用 |
 |---|---|---|
-| **已经装了 `AWAvenue-Ads` / `anti-AD` / `GOODBYEADS` 等**（大多数人） | **`*-delta-*`（3011 条）** | 已经覆盖的 874 条不再重复加载 |
-| **什么都没装，就想要一份完整的** | **`*-ads-*` 完整版（3885 条）** | |
+| 有 AWAvenue | `mihomo-ads-delta.list` | `surge-ads-delta.list` |
+| **没有 / 不确定** | **`mihomo-ads.list`** ⭐ | **`surge-ads.list`** ⭐ |
 
-两份内容同源，只是 delta 版扣掉了已经在用 AWAvenue 的部分。
+> 差集只比完整版少 **53 条**（3835 vs 3888），体积差异可以忽略。**除非你确定 AWAvenue 在跑，否则直接用完整版**——省得为 53 条规则埋一个"以为有人管、其实没人管"的坑。
 
-### 第 2 步：按客户端选后缀
+白名单（可选，强烈建议）：
 
-**mihomo / Clash.Meta**
-
-| 文件 | 条数 | behavior | 保真度 |
-|---|---:|---|---|
-| `mihomo-ads-delta-classical.list` ⭐ | 3011 | `classical` | **100%** |
-| `mihomo-ads-classical.list` | 3885 | `classical` | **100%** |
-| `mihomo-ads-domain.list` | 3736 | `domain` | 丢 149 条中缀通配 |
-
-**Surge**
-
-| 文件 | 条数 | 引用方式 | 保真度 |
-|---|---:|---|---|
-| `surge-ads-delta-ruleset.list` ⭐ | 3011 | `RULE-SET` | **100%** |
-| `surge-ads-ruleset.list` | 3885 | `RULE-SET` | **100%** |
-| `surge-ads-domainset.txt` | 3736 | `DOMAIN-SET` | 丢 149 条中缀通配 |
-
-> **★ 默认就用 `.list`（RULE-SET / classical）。**
-> `domain` 和 `DOMAIN-SET` 这两种"高性能格式"装不下中缀星号（如 `p*-ad.adkwai.com`），会丢 149 条。3000 条的量级下，性能差异可以忽略，不值得为它丢规则。
-> 只有当你真的在意内存、且能接受这 149 条失效时，才换用 `domain` / `DOMAIN-SET` 版本。
-
-### 第 3 步：白名单（可选但建议）
-
-| 文件 | 条数 | 用不用 |
+| 文件 | 条数 | 说明 |
 |---|---:|---|
-| `*-white-guard-*` ⭐ | **42** | **推荐**，只放行会被误杀的 |
-| `*-white-*`（完整白名单） | 325 | 见 [第五节](#五白名单为什么推荐只用-42-条那份)，直接全量前插有副作用 |
+| `mihomo-white-guard.list` / `surge-white-guard.list` | 42 | **只要这份**。上游 325 条白名单里，只有 42 条真的会被这套黑名单误杀；其余是上游为**别的**规则集准备的 |
+
+> 别直接引用上游全量 325 条白名单：里面含 `github.com`、`dns.google`、`dropbox.com`、`jsdelivr.net`、`icloud.com`，放在 REJECT 之前会把它们强制直连，国内环境属负优化。
+
+**规则组成**（完整版 3888 条）：
+
+| 类型 | 条数 | 来源 |
+|---|---:|---|
+| `DOMAIN-SUFFIX` | 3670 | `blacklist.txt` 普通域名 → 后缀语义 |
+| `DOMAIN-SUFFIX` | 66 | `blacklist_wildcard.txt` 前缀通配 `*.x.com` |
+| `DOMAIN-REGEX` / `DOMAIN-WILDCARD` | 149 | `blacklist_wildcard.txt` 含中缀星号（如 `p*-ad.adkwai.com`） |
+| `DOMAIN-SUFFIX` | 3 | 从 URL 脏数据还原的 host |
 
 ---
 
-## 二、mihomo / OpenClash 怎么配
-
-### 远程引用（推荐，自动更新）
+## 二、mihomo / OpenClash 怎么用
 
 ```yaml
 rule-providers:
+  jinx-ads:
+    type: http
+    behavior: classical          # ⚠️ 必须 classical, 不要用 domain
+    format: text
+    url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads.list"
+    path: ./rule_provider/jinx-ads.list
+    interval: 86400
+
   jinx-white-guard:
     type: http
     behavior: classical
     format: text
-    url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard-classical.list"
+    url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list"
     path: ./rule_provider/jinx-white-guard.list
     interval: 86400
 
-  jinx-ads-delta:
-    type: http
-    behavior: classical
-    format: text
-    url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads-delta-classical.list"
-    path: ./rule_provider/jinx-ads-delta.list
-    interval: 86400
-
 rules:
-  # ① 先放行会被误杀的（必须排在 REJECT 之前）
+  # ① 白名单(精确放行)必须在 REJECT 之前
   - RULE-SET,jinx-white-guard,DIRECT
-
-  # ② 再拒绝广告
-  - RULE-SET,jinx-ads-delta,REJECT
-  - RULE-SET,AWAvenue-Ads,REJECT
-
-  # ③ 之后才是常规分流
-  - GEOSITE,cn,直连
-  - GEOIP,CN,直连
-  # ...
-  - MATCH,🐟 漏网之鱼
+  # ② 广告拦截
+  - RULE-SET,jinx-ads,REJECT
+  # ③ 你原有的规则接在后面
+  # - GEOSITE,cn,DIRECT ...
+# ⚠️ REJECT 绝不能排在 GEOSITE,cn,DIRECT / GEOIP,cn,DIRECT 之后 —— 那等于白加
 ```
 
-### 本地文件引用
-
-把 `.list` 传到路由器（如 `/etc/openclash/rule_provider/`），改用 `type: file`：
-
-```yaml
-rule-providers:
-  jinx-ads-delta:
-    type: file
-    behavior: classical
-    format: text
-    path: ./rule_provider/jinx-ads-delta-classical.list
-    interval: 86400
-```
-
-> **OpenClash 用户注意**：OpenClash 会覆写 `rule-providers` 与 `rules` 段。要持久生效，请写进「插件设置 → 覆写设置」或使用自定义配置文件，并确认最终运行文件里能看到这两条规则。改完务必先 `clash_meta -t` 校验再重启，否则内核起不来会直接断网。
+> `behavior: domain` 不要用：它对普通域名的匹配范围存在歧义（是否含子域取决于实现），而 `classical` + 显式 `DOMAIN-SUFFIX` 语义明确、可控。
 
 ---
 
-## 三、Surge 怎么配
-
-把下面两行加到 profile 的 `[Rule]` 段**最前面**：
+## 三、Surge 怎么用
 
 ```
 [Rule]
-# ① 先放行会被误杀的 42 条（普通匹配；pre-matching 只能配 REJECT 系策略，写在这里无效）
-RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard-ruleset.list,DIRECT
-
-# ② 再拒绝广告
-RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-ads-delta-ruleset.list,REJECT,pre-matching,extended-matching
-
-# ③ 之后才是你原有的分流规则
+# ① 白名单（精确放行）
+RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard.list,DIRECT
+# ② 广告拦截
+RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-ads.list,REJECT,pre-matching,extended-matching
+# ③ 你自己的规则接在后面
 ```
 
-### 两个参数为什么建议加上
+两个参数的作用：
 
-| 参数 | 作用 | 依据 |
-|---|---|---|
-| `pre-matching` | 让 REJECT 提前到 **DNS 查询阶段 + TCP 握手阶段**生效，App 还没连上就被掐断 | 这是 Surge 官方文档里明确说明的行为，也是**最接近 Jinx 原生体验**的形态（Jinx 靠系统级 DNS 拦截） |
-| `extended-matching` | 除域名外，额外用 **TLS SNI / HTTP Host** 匹配 | 专治"App 直连 IP 导致域名规则不生效"的漏网情况 |
-
-两个可以叠加，写成 `REJECT,pre-matching,extended-matching`。
-
-### 两个关于参数的硬约束（容易踩）
-
-1. **`pre-matching` 只支持 REJECT 系策略**——写在 `DIRECT` 行上没有意义。所以白名单那行不要加。
-2. **`pre-matching` 不能写进规则集文件内部**——只能写在 profile 的 `RULE-SET` 行上。规则集文件里出现它会被当无效行跳过。（本仓库的 `.list` 里没有写，放心。）
-
----
-
-## 四、为什么顺序是生死线
-
-mihomo 和 Surge 都是**自上而下、命中即停**。这意味着：
-
-```
-❌ 错误顺序
-RULE-SET,域名大全,Direct      ← 国内域名在这里就被放走了
-RULE-SET,jinx-ads,REJECT      ← 永远轮不到，等于白加
-```
-
-```
-✅ 正确顺序
-RULE-SET,jinx-white-guard,DIRECT   ← 白名单先放行
-RULE-SET,jinx-ads,REJECT           ← 黑名单再拒绝
-RULE-SET,国内直连,DIRECT            ← 常规分流最后
-```
-
-**你原来"用 AWAvenue-Ads 去不掉"很可能就踩了这条**：如果 REJECT 规则集排在 `GEOSITE,cn,DIRECT` 或 `GEOIP,CN,DIRECT` 后面，国内 App 的广告域名会先被"国内直连"截胡，广告规则一次都不会被求值。
-
-加分项：mihomo 里 `REJECT` 也可以替换成 `REJECT-DROP`（直接丢包，不返回 RST），对某些会重试的 App 更干净，代价是偶尔会多等一个超时。
-
----
-
-## 五、白名单：为什么推荐只用 42 条那份
-
-上游白名单有 **325 条**，但把它整份插到 REJECT 前面当 `DIRECT` 会有**副作用**——它里面包含：
-
-```
-github.com          raw.githubusercontent.com    dns.google
-cloudflare-dns.com  jsdelivr.net                dropbox.com
-onedrive.live.com   icloud.com                  mail.qq.com
-```
-
-这些都是"作者为了防止**其他**规则集误杀"而放进去的。**如果整份放在最前面走 DIRECT，会把 github / dns.google / dropbox / onedrive 全部强制直连**——对国内网络环境来说，这几乎是帮倒忙（这些域名往往正需要走代理）。
-
-**真正的白名单只需要"会被当前黑名单误杀"的那部分。** 我按下面的规则算了一遍：
-
-| 白名单条目 | 条数 |
-|---|---:|
-| 完全不与黑名单冲突（放进去只会造成上表的副作用） | 282 |
-| **真的会被黑名单误杀（需要保留）** | **42** |
-
-所以 `*-white-guard-*` 就是这 42 条：
-
-```
-zlink.ugsdk.cn   praisewindow.ugsdk.cn   cactus.jd.com
-effect.snssdk.com   tnc3-aliec2.snssdk.com   mssdk.bytedance.com
-user.jpush.cn   s.jpush.cn   httpdns.meituan.com   oneid.getui.net
-aedns.weixin.qq.com   p.l.qq.com   appcfg.v.qq.com   ...（共 42 条）
-```
-
-这 42 条基本都是国内 App 的域名，**即使强制直连也是本来就走直连的**，所以没有副作用。
-
-> 这 42 条是按**完整黑名单**算的。如果你用的是 delta 版，其中 20 条严格来说仍在 delta 黑名单里、另外 22 条则是因为 AWAvenue 也可能拦它们才保留——两种部署都用同一份，不用改。
-
-**什么时候才需要完整 325 条那份？** 当你同时还挂了别的、覆盖面很杂的规则集时，可以拿它做全局 DIRECT 白名单——但要清楚它会把你上面的那些域名一并强制直连。
-
----
-
-## 六、已知坑
-
-1. **超广通配是误杀头号嫌疑**
-   上游黑名单里有 `ad.*`、`ad-*`、`ads.*`、`pangolin*` 这类规则，**一条就能覆盖几百个域名**（`ad.*` 单条约等于 855 条精确规则）。某个 App 突然连不上，先怀疑这几条——临时把它注释掉验证。
-
-2. **中缀星号在两种格式下会丢**
-   `p*-ad.adkwai.com` 这类共 149 条，**只有 mihomo `classical` / Surge `RULE-SET` 装得下**；`domain` / `DOMAIN-SET` 会静默丢弃。
-
-3. **`*.x.com` 不含裸域 `x.com`**
-   标准 glob 语义。本仓库统一按"跨级 + 含裸域"放宽（转成 `DOMAIN-SUFFIX`），对黑名单来说是宁可多拦、更安全；但副作用是解析行为与 Jinx 原文略有差异。
-
-4. **CDN 有缓存**
-   jsDelivr 更新后有几分钟到几小时延迟。想立刻生效，把 `@main` 换成具体的 commit SHA。
-
-5. **内容端到端不可校验**
-   规则集是明文 HTTP 拉下来的，无法验证签名。所以请用**你自己的仓库地址**（本仓库）而不是随便引用他人链接——你至少能确认自己仓库里的内容。
-
-6. **本仓库是快照，不会自动跟随上游**
-   上游更新后需要重新跑一次转换，见下一节。
-
-7. **别把白名单放在 REJECT 之后**
-   放在后面 = 无效。
-
----
-
-## 七、数据来源与转换规则
-
-### 上游
-
-| 项 | 值 |
+| 参数 | 作用 |
 |---|---|
-| 仓库 | https://github.com/VME98/jinx-rules |
-| 说明 | Jinx App 的远程规则仓库模板 |
-| 版本 | `version.json` → `3.1.9`（`lastUpdate` 2026-09-15） |
-| 许可 | **无**（仓库未声明 License） |
+| `pre-matching` | REJECT 提前到 **DNS / 连接建立**阶段生效，最接近 Jinx 那种系统级 DNS 拦截的体验 |
+| `extended-matching` | 额外按 **TLS SNI / HTTP Host** 匹配，**专治 App 直连 IP 导致域名规则失效** |
 
-上游 `version.json` 原文（用于核对，App 显示的条数应与之一致）：
+> **`pre-matching` 只能跟 REJECT 系策略用**，`DIRECT` 加它是无效的（Surge 官方明确）。所以白名单那行不要写它。
+
+---
+
+## 四、为什么"顺序"是生死线
+
+规则引擎**自上而下、先匹配先赢**。你机器上 99% 的国内广告域名，同时也属于「中国大陆域名」。
+
+```
+如果顺序是:
+    GEOSITE,cn,DIRECT      ← 先命中, 直接放行 ❌
+    RULE-SET,jinx-ads,REJECT ← 永远轮不到, 形同虚设
+
+  某个国内 App 的广告域名 = 国内域名 → 被第一条接走 → 直连 → 广告照常显示
+```
+
+**判断你顺序对不对的土办法**：开一个本来有广告的 App，看面板的**规则命中**。
+
+- 看到 `jinx-ads` 命中 → 顺序对
+- 只看到 `cn` / `DIRECT` / `Final` 命中 → **顺序错了，把 REJECT 提到前面**
+
+---
+
+## 五、已知坑
+
+1. **顺序**：见上一节。这是最常见的"规则看着配了、广告还在"的原因。
+2. **超广通配**：源里有 `ad.*`、`ad-*`、`ads-*`、`pangolin*` 这类一条覆盖几百条的规则，拦截面积很大。某 App 出问题先怀疑它们。
+3. **中缀星号**：`p*-ad.adkwai.com` 只存在于带类型前缀的格式（mihomo `classical` / Surge `RULE-SET`）。这也是本仓库只提供这两种格式的原因。
+4. **jsDelivr 缓存**：更新后 CDN 有几分钟到几小时延迟。急用可在 URL 里加 `?v=<日期>` 绕缓存。
+5. **`raw.githubusercontent.com` 在国内常不可达**，优先用 jsDelivr。
+6. **只做域名级拦截**：能拦 DNS 层面的广告域；**同域内嵌广告**（广告和内容同一个域名）需要 MITM/URL 级规则，本仓库的规则**做不到**。
+7. **`DOMAIN-SUFFIX` 覆盖面比 `DOMAIN` 大得多**：这是为了复刻 Jinx 的行为。若出现误杀，用白名单加回，而不是把语义改回精确。
+
+---
+
+## 六、数据来源与转换规则
+
+`version.json`（上游原文）：
 
 ```json
 { "version": "3.1.9",
@@ -261,62 +176,67 @@ aedns.weixin.qq.com   p.l.qq.com   appcfg.v.qq.com   ...（共 42 条）
   "mitmSkipDomainsCount": 33 }
 ```
 
-### 语法映射
+语法映射：
 
-三家对 `*` 的定义**互不相同**，所以不能原样引用。mihomo 官方语法规定 `*` 只匹配一级、不跨点，而 Jinx 的 `*` 是标准 glob（跨点、可内嵌）：
+| 上游写法 | 含义 | mihomo | Surge |
+|---|---|---|---|
+| `bugly.qq.com` | 该域名 + **全部子域** | `DOMAIN-SUFFIX,bugly.qq.com` | `DOMAIN-SUFFIX,bugly.qq.com` |
+| `*.cupid.iqiyi.com` | 同上（等价） | `DOMAIN-SUFFIX,cupid.iqiyi.com` | `DOMAIN-SUFFIX,cupid.iqiyi.com` |
+| `p*-ad.adkwai.com` | 中缀通配（单级） | `DOMAIN-REGEX,^p.*\-ad\.adkwai\.com$` | `DOMAIN-WILDCARD,p*-ad.adkwai.com` |
+| 白名单 `qq.com` | **仅精确**，不继承子域 | `DOMAIN,qq.com` | `DOMAIN,qq.com` |
 
-| Jinx 写法 | mihomo（classical） | Surge |
-|---|---|---|
-| `x.com` | `DOMAIN,x.com` | `DOMAIN,x.com` |
-| `*.x.com` | `DOMAIN-SUFFIX,x.com` | `DOMAIN-SUFFIX,x.com` |
-| `p*-ad.x.com` | `DOMAIN-REGEX,^p.*-ad\.x\.com$` | `DOMAIN-WILDCARD,p*-ad.x.com` |
-| `https://…`（脏数据） | 丢弃 | 丢弃 |
+白名单语义的依据：Jinx 日志中白名单含 `qq.com`，但 `sdk.e.qq.com`、`c3.gdt.qq.com`、`ios.bugly.qq.com` 均被正常拦截 → 白名单不向子域继承。
 
-统一按"跨级 + 含裸域"放宽（理由见第六节第 3 条）。
+为何用后缀语义的依据：日志中 `sdkquic.e.qq.com` 被拦截，而列表里只有 `e.qq.com`；`ios.bugly.qq.com` 被拦截，而列表里只有 `bugly.qq.com` → 黑名单按后缀生效。
 
-### 产物规则类型分布
-
-| 文件 | 规则数 | 构成 |
-|---|---:|---|
-| `mihomo-ads-classical.list` | 3885 | DOMAIN 3670 / DOMAIN-SUFFIX 66 / DOMAIN-REGEX 149 |
-| `surge-ads-ruleset.list` | 3885 | DOMAIN 3670 / DOMAIN-SUFFIX 66 / DOMAIN-WILDCARD 149 |
-| `*-ads-delta-*` | 3011 | DOMAIN 2807 / SUFFIX 62 / 通配 142 |
-| `*-ads-domain*` / `*-domainset*` | 3736 | 同上，但丢弃 149 条中缀通配 |
-| `*-white-*`（完整） | 325 | DOMAIN 283 / DOMAIN-SUFFIX 38 / DOMAIN-WILDCARD 4 |
-| `*-white-guard-*` | 42 | DOMAIN 41 / DOMAIN-SUFFIX 1 |
-
-### 上游文件里**没有**被转换的部分
-
-`url_blacklist.txt`、`url_whitelist.txt`、`mitm_skip_domains.txt`、`url_response_policies.json` 等文件**不在本仓库内**，因为它们依赖 MITM + URL 层拦截能力，mihomo / Surge 的域名规则无法表达。本仓库只转换纯域名黑/白名单。
+**未转换的内容**：`url_blacklist*`、`url_whitelist*`、`mitm_skip_domains.txt`、`url_response_policies.json` 依赖 MITM 上下文，clash/Surge 的域名规则无法表达，本仓库不提供。
 
 ---
 
-## 八、上游更新后怎么重新生成
+## 七、重新生成
 
-转换逻辑固化成了一个可复用脚本（不依赖本仓库）：
+上游更新后，用配套脚本重跑：
 
 ```bash
-# 1) 拉上游最新规则
-git clone https://github.com/VME98/jinx-rules
+# 黑名单：完整版（suffix 语义）
+python convert_ruleset.py --src ./jinx-rules --out ./out \
+    --fixed blacklist.txt --wild blacklist_wildcard.txt \
+    --tag ads --mode suffix
 
-# 2) 黑名单 -> mihomo + Surge（含与 AWAvenue 的差集）
-python convert_ruleset.py --src ./jinx-rules --out ./converted \
-    --fixed blacklist.txt --wild blacklist_wildcard.txt --tag ads \
-    --delta-ref https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule-Clash-Classical.yaml
+# 黑名单：差集版（只剔除被 AWAvenue 深度覆盖的）
+python convert_ruleset.py --src ./jinx-rules --out ./out \
+    --fixed blacklist.txt --wild blacklist_wildcard.txt \
+    --tag ads-delta --mode suffix \
+    --delta-ref https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Clash-Classical.yaml
 
-# 3) 白名单瘦身：只保留会被黑名单误杀的
-python convert_ruleset.py --src ./jinx-rules --out ./converted \
-    --fixed whitelist.txt --wild whitelist_wildcard.txt --tag white-guard \
+# 白名单：精简 guard（exact 语义）
+python convert_ruleset.py --src ./jinx-rules --out ./out \
+    --fixed whitelist.txt --wild whitelist_wildcard.txt \
+    --tag white-guard --mode exact \
     --guard-against-fixed blacklist.txt --guard-against-wild blacklist_wildcard.txt
 ```
 
-<sub>脚本见本仓库 issue 或作者本地 skill `adblock-ruleset-port`。核心是三步：分类 → 语法翻译 → 差集/碰撞过滤。</sub>
+---
+
+## 八、许可与免责
+
+- 规则数据版权归上游 `VME98/jinx-rules` 及其原始来源（多来源合并，不逐一可考）。本仓库**不主张任何权利**、不声明 License。
+- 本仓库仅提供格式转换结果，**不对拦截效果与误杀后果作任何保证**。
+- `DOMAIN-SUFFIX` 会拦截整个子域树，请自行评估对自有服务的影响；必要时用白名单放行。
+- 若上游作者或任何权利人要求，本仓库将立即删除。
 
 ---
 
-## 九、许可与免责
+## 文件清单
 
-- **规则数据**：版权与权利归上游 [`VME98/jinx-rules`](https://github.com/VME98/jinx-rules) 作者。上游未声明 License，本仓库亦**不主张任何许可**，仅作格式转换后的转载与整理。
-- **转换产物**：可自由取用，但请**保留本仓库与上游仓库的链接**，不要抹去来源后二次分发。
-- **免责**：广告拦截必然存在误杀与漏拦，且域名列表随时可能变更。请自行验证后再长期使用，作者不对因使用本规则集导致的任何网络异常负责。
-- **下架请求**：若你是上游作者或权利方且不希望这些产物被分发，请提 issue，我会立即删除仓库。
+| 文件 | 条数 | 用途 | 状态 |
+|---|---:|---|---|
+| `mihomo-ads.list` | 3888 | mihomo `behavior: classical`，完整版 | ⭐ 推荐 |
+| `surge-ads.list` | 3888 | Surge `RULE-SET`，完整版 | ⭐ 推荐 |
+| `mihomo-ads-delta.list` | 3835 | 已有 AWAvenue 时的差集版 | 可选 |
+| `surge-ads-delta.list` | 3835 | 同上，Surge | 可选 |
+| `mihomo-white-guard.list` | 42 | mihomo 白名单（精确放行） | ⭐ 建议 |
+| `surge-white-guard.list` | 42 | Surge 白名单（精确放行） | ⭐ 建议 |
+| `mihomo-ads-classical.list` 等 v1 文件 | — | — | ❌ 已废弃，语义有误 |
+| `*-domain.list` / `*-domainset.txt` | — | — | ❌ 已废弃，丢失中缀通配 + 语义歧义 |
+| `surge-white-ruleset.list` | 325 | 上游全量白名单 | ⚠️ 不建议，含 github/dns.google 等 |
