@@ -41,7 +41,7 @@ v2 同时修正了：
 3. 3 条混进来的 URL 脏数据（`https://us.l.qq.com/exapp` 等）→ 还原为 host 保留，不再丢弃
 4. 差集只剔除被参照规则集**深度覆盖**（后缀/关键词）的条目，不再因为对方有一条精确规则就整条丢掉
 
-**v1 的 `*-domain.list` / `*-domainset.txt` 变体已废弃**（既丢中缀通配，又有精确匹配问题），请不要再引用。
+**v1 的 `*-domain.list` / `*-domainset.txt` 变体已从仓库移除**（既丢中缀通配，又有精确匹配问题），本仓库只保留下表列出的 v2 文件。
 
 ---
 
@@ -237,6 +237,6 @@ python convert_ruleset.py --src ./jinx-rules --out ./out \
 | `surge-ads-delta.list` | 3835 | 同上，Surge | 可选 |
 | `mihomo-white-guard.list` | 42 | mihomo 白名单（精确放行） | ⭐ 建议 |
 | `surge-white-guard.list` | 42 | Surge 白名单（精确放行） | ⭐ 建议 |
-| `mihomo-ads-classical.list` 等 v1 文件 | — | — | ❌ 已废弃，语义有误 |
-| `*-domain.list` / `*-domainset.txt` | — | — | ❌ 已废弃，丢失中缀通配 + 语义歧义 |
-| `surge-white-ruleset.list` | 325 | 上游全量白名单 | ⚠️ 不建议，含 github/dns.google 等 |
+
+> **仓库只保留以上 6 个规则文件。** 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
+> **如果你的客户端仍引用着这些旧地址，请立即换成本表上方的新文件名**——旧地址现已 404，会导致规则集拉取失败。
