@@ -2,7 +2,7 @@
 
 把 **Jinx**（iOS 去广告 App）的远程黑/白名单，转换成 **mihomo（含 OpenClash）** 与 **Surge** 可直接引用的规则文件。
 
-产出这些文件的转换脚本与完整方法论一并放在 [`skill/`](./skill) 目录，可自行复现（见 §七）。
+产出这些文件的转换脚本与完整方法论一并放在 [`skill/`](./skill) 目录，可自行复现（见 §八）。
 
 > ⚠️ **本仓库是格式转换产物，不是原创规则。** 数据全部来自上游仓库 `VME98/jinx-rules`（下称"上游"），本仓库只做**语法翻译**，不新增、不修改任何一条规则内容。
 
@@ -111,6 +111,8 @@ rules:
 ```
 
 > `behavior: domain` 不要用：它对普通域名的匹配范围存在歧义（是否含子域取决于实现），而 `classical` + 显式 `DOMAIN-SUFFIX` 语义明确、可控。
+>
+> 🚨 **OpenClash 用户请先读 §五**：若开着「绕过中国大陆 IP」，本节配置可能对相当一部分域名**完全不生效**——不是配置写错，而是流量压根没进内核。
 
 ---
 
@@ -159,7 +161,97 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 
 ---
 
-## 五、已知坑
+## 五、OpenClash 实战陷阱：一个开关让整套规则「静默失效」
+
+**这是 OpenClash 用户反馈最多的「规则明明配了、日志也有命中、广告却还在」的真凶。**
+
+### 症状
+
+规则接好了，日志里也确实看得到命中（`match RuleSet(jinx-ads) using REJECT`），但**部分广告照旧显示**。更诡异的是：**被漏掉的那些域名，日志里一条记录都没有。**
+
+### 根因：`绕过中国大陆 IP`（`china_ip_route`）
+
+这个开关打开时（默认常开），OpenClash 在生成运行配置阶段会静默插入一条规则——源码 `/usr/share/openclash/yml_change.sh`：
+
+```ruby
+if fake_ip_mode == 'fake-ip' && (china_ip_route || china_ip6_route)
+    filter_rule = 'rule-set:oc-cn-domain'
+    (Value['dns']['fake-ip-filter'] ||= []) << filter_rule   # ← 把「中国大陆域名集」塞进 fake-ip-filter
+end
+```
+
+于是形成一条**绕过规则引擎的闭环**：
+
+```
+域名命中 oc-cn-domain（中国大陆域名集）
+      ↓
+DNS 返回真实 IP（不是 198.18.x.x 的 fake-ip）
+      ↓
+防火墙: ip daddr @china_ip_route … return   ← 目标 IP 属大陆 → 路由层直接放行
+      ↓
+连接根本没进 mihomo → 规则引擎没有机会执行 → 广告照常
+```
+
+**为什么中招的偏偏是广告**：大量国内 App 的广告 / 埋点 SDK 挂在国内大厂域名下（`*.volces.com`、`*.bytedns.com` 之类），天然落进「中国大陆域名集」。
+
+> 另有一类漏拦**与绕过无关**：域名进了内核，却被 `GEOSITE,cn,DIRECT` / `GEOIP,cn,DIRECT` 接走——那是**规则集没收录**，只能靠补自定义规则解决。
+
+### 两条判据（任一条成立即中招）
+
+**判据 1 —— 「日志为空」本身就是证据**
+
+```bash
+grep '<怀疑的域名>' /tmp/openclash.log
+```
+
+返回 **0 条** → 连接压根没进内核。**能被拦的域名，日志里必定有记录**；没有记录，就是没进来。
+
+**判据 2 —— 抓 DNS 应答，看是否并存两种结果**
+
+```bash
+tcpdump -i br-lan -n -vv 'udp port 53'
+```
+
+```
+xxx.volces.com.  A  183.36.42.103      ← 真实 IP = 被绕过 ❌
+yyy.example.com. A  198.18.0.30        ← fake-ip  = 进内核 ✅
+```
+
+同一台设备、同一时刻，两种应答并存 → 石锤。
+
+### 解法：关掉「绕过中国大陆 IP」
+
+```bash
+uci set openclash.config.china_ip_route='0'
+uci commit openclash
+/etc/init.d/openclash restart
+```
+
+关掉后源码那个 `if` 条件不再成立 → 不再注入 `oc-cn-domain` → **所有域名都走 fake-ip**、连接全部进 mihomo → 域名规则 100% 有机会执行。
+
+| 项 | 说明 |
+|---|---|
+| 保留项 | `fake-ip-filter` 里 NTP / STUN / 局域网等硬编码条目**不受影响**，仍返回真实 IP |
+| 副作用 | 域名访问多一跳内核；**纯 IP 直连不受影响**（fake-ip 模式下只有 fake-ip 目标才被重定向） |
+| 回滚 | `uci set openclash.config.china_ip_route='1'` + commit + restart |
+
+### 改完怎么验收（三步）
+
+1. **DNS 变了** —— 同一域名从真实 IP 变成 `198.18.x.x`
+2. **请求被拒** —— 直接请求该域名，连接 / TLS 握手失败
+3. **日志有了** —— `/tmp/openclash.log` 出现 `match RuleSet(jinx-ads) … using REJECT`
+
+### OpenClash 正确姿势清单
+
+- ✅ `behavior: classical` + `format: text`（见 §二）
+- ✅ 规则顺序：白名单 → REJECT → `GEOSITE,cn`（见 §四）
+- ✅ **关掉「绕过中国大陆 IP」**（本节）—— 否则前两条都可能白做
+- ✅ 保持 sniffer 开启（`enable_meta_sniffer=1`）：对「App 直连 IP、包里没域名」的场景，用 TLS SNI 兜底还原域名
+- ✅ 验证规则集是否真加载：看 **provider 的规则条数**，别在 `/rules` 里数——一个 RuleSet 在 `/rules` 里只占 **1 条**，很容易误判成"没加载"
+
+---
+
+## 六、已知坑
 
 1. **顺序**：见上一节。这是最常见的"规则看着配了、广告还在"的原因。
 2. **超广通配**：源里有 `ad.*`、`ad-*`、`ads-*`、`pangolin*` 这类一条覆盖几百条的规则，拦截面积很大。某 App 出问题先怀疑它们。
@@ -168,10 +260,11 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 5. **地址二选一**：每个文件都提供 **jsDelivr** 与 **GitHub raw** 两种链接（见文末"文件清单"）。优先用 jsDelivr，理由是 `raw.githubusercontent.com` 在国内常不可达；只有在 jsDelivr 拉不动、或你需要"改动立刻生效"（raw 无 CDN 缓存延迟）时才换 raw，且注意 raw 需能直连 GitHub。
 6. **只做域名级拦截**：能拦 DNS 层面的广告域；**同域内嵌广告**（广告和内容同一个域名）需要 MITM/URL 级规则，本仓库的规则**做不到**。
 7. **`DOMAIN-SUFFIX` 覆盖面比 `DOMAIN` 大得多**：这是为了复刻 Jinx 的行为。若出现误杀，用白名单加回，而不是把语义改回精确。
+8. **OpenClash 的前置开关**：见 §五。开着「绕过中国大陆 IP」时，本仓库规则可能对相当一部分域名**完全不生效**，而且日志里看不出任何异常（没进内核 = 没日志）。
 
 ---
 
-## 六、数据来源与转换规则
+## 七、数据来源与转换规则
 
 `version.json`（上游 `rules/version.json`）：
 
@@ -202,7 +295,7 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 
 ---
 
-## 七、重新生成（脚本随仓库提供）
+## 八、重新生成（脚本随仓库提供）
 
 本仓库的规则**不是手工维护的死快照**——产出它们的脚本与完整方法论一并放在 `skill/` 目录下：
 
@@ -250,7 +343,7 @@ python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist
 
 ---
 
-## 八、许可与免责
+## 九、许可与免责
 
 - 规则数据版权归上游 `VME98/jinx-rules` 及其原始来源（多来源合并，不逐一可考）。本仓库**不主张任何权利**、不声明 License。
 - **数据与工具分开看**：`skill/` 目录下的转换脚本与方法论文档是本仓库自带的工具，**不含任何上游数据**，可自由取用、修改、再分发；上面"不主张许可"只针对根目录的规则数据，不约束 `skill/`。
@@ -294,7 +387,7 @@ python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist
 | `mihomo-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-white-guard.list> |
 | `surge-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-white-guard.list> |
 
-> **仓库结构**：根目录只保留以上 **6 个规则文件 + `README.md`**；另有 `skill/` 目录（转换脚本 + 方法论文档），**不参与规则引用**，见 §七。
+> **仓库结构**：根目录只保留以上 **6 个规则文件 + `README.md`**；另有 `skill/` 目录（转换脚本 + 方法论文档），**不参与规则引用**，见 §八。
 >
 > 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
 > **如果你的客户端仍引用着这些旧地址，请立即换成本表上方的新文件名**——旧地址现已 404，会导致规则集拉取失败。
