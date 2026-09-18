@@ -155,7 +155,7 @@ python convert_ruleset.py --src <源目录> --out <输出目录> \
 
 ## 对外交付：必须写 README
 
-把规则文件托管成公开仓库时，**必须**附 `README.md`，否则使用者（包括未来的自己）无从下手。必备七块：
+把规则文件托管成公开仓库时，**必须**附 `README.md`，否则使用者（包括未来的自己）无从下手。必备八块：
 
 1. **来源与致谢 + 许可状态**：写清上游仓库链接、对应版本、上游是否声明 License（无声明就明确写"无，本仓库不主张许可"）。**绝不把转换产物的版权据为己有**，并给出下架渠道（"作者提 issue 即删"）。
 2. **选文件决策表**：按"你已有的规则集 / 客户端 / 保真 vs 性能"三档给结论，别让用户自己猜文件名。
@@ -164,6 +164,14 @@ python convert_ruleset.py --src <源目录> --out <输出目录> \
 5. **已知坑**：超广通配误杀、高性能格式丢中缀通配、CDN 缓存、顺序、参数限制。
 6. **重新生成方式（含脚本本体）**：只给命令**不算可复现**——脚本必须**随仓库一起上传**（放 `skill/` 或 `tools/` 目录），README 里写全"clone 下来就能跑"的流程（取源文件 → 跑脚本 → 覆盖上传），并标注源文件在上游的准确路径。实测教训：README 里只写 `python convert_ruleset.py ...` 而仓库无此脚本，使用者第一行就报 `can't open file 'convert_ruleset.py'`。
 7. **告知可复现性是"已实测"的**：重跑一遍并与仓库现存文件做 `diff`，把结果写进 README（"逐字节一致"）。这既是给使用者的信心，也是自己下次改动时的回归基线。
+8. **客户端前置开关 / 环境陷阱（最容易被漏掉的一块）**：规则本身完全正确，也可能因为客户端的一个开关而**静默失效**——没有报错、规则命中日志也正常，但流量根本没走规则。**这类内容必须单独成节，不能塞进"已知坑"一笔带过**，它是"规则配了却没效果"的头号原因。至少覆盖：
+   - **OpenClash / mihomo**：开着「绕过中国大陆 IP」（`china_ip_route=1`）时，OpenClash 生成配置阶段会把 `rule-set:oc-cn-domain` 注入 `dns.fake-ip-filter`（源码 `/usr/share/openclash/yml_change.sh`）→ 命中该集合的域名 DNS 返回**真实 IP**（不是 `198.18.x.x`）→ 又在防火墙层被 `ip daddr @china_ip_route … return` 放行 → **流量不进内核，规则引擎没有机会执行**。
+     - 判据：某域名在规则集里查得到，但客户端日志 `grep` 返回 **0 条**（没进内核 = 没日志）；或抓 DNS 看同一设备上并存"真实 IP"与"fake-ip"两种应答。
+     - 解法：`uci set openclash.config.china_ip_route='0'` + commit + restart。副作用仅"域名访问多一跳内核"，纯 IP 直连不受影响。
+   - **Surge**：`pre-matching` 只能跟 REJECT 系策略（DIRECT 加它无效）；`extended-matching` 是"App 直连 IP 时按 TLS SNI / HTTP Host 兜底匹配"的关键，缺了它域名规则会大批失效。
+   - 通用验收三步：① DNS 应答从真实 IP 变 fake-ip；② 请求被拒（连接/TLS 失败）；③ 日志出现 `match RuleSet(<名字>) … using REJECT`。
+
+参考实现：`jinx-ads-rules` 仓库 README 的 §五「OpenClash 实战陷阱」即为该块的标准写法。
 
 
 ## 托管到公网（Surge 必需）
