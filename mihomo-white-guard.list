@@ -1,0 +1,46 @@
+# auto-converted by adblock-ruleset-port
+# source: jinx-rules
+# mode: exact
+# entries: 42
+DOMAIN,zlink.ugsdk.cn
+DOMAIN,praisewindow.ugsdk.cn
+DOMAIN,cactus.jd.com
+DOMAIN,effect.snssdk.com
+DOMAIN,tnc3-bjlgy.snssdk.com
+DOMAIN,tnc3-aliec2.snssdk.com
+DOMAIN,tnc3-alisc1.snssdk.com
+DOMAIN,mssdk.bytedance.com
+DOMAIN,pitaya.bytedance.com
+DOMAIN,user.jpush.cn
+DOMAIN,user-ipv6.jpush.cn
+DOMAIN,m-cloud.zhihu.com
+DOMAIN,license.vodglcdn.com
+DOMAIN,dypnsapi.aliyuncs.com
+DOMAIN,search-app-m.i4.cn
+DOMAIN,pub-conf-m.i4.cn
+DOMAIN,cl-m.i4.cn
+DOMAIN,list-app-m.i4.cn
+DOMAIN,p.l.qq.com
+DOMAIN,appcfg.v.qq.com
+DOMAIN,nbfriend-mtop.cainiao.com
+DOMAIN,httpdns.meituan.com
+DOMAIN,sdk.open.talk.getui.net
+DOMAIN,sdk.open.talk.gepush.com
+DOMAIN,oneid.gepush.com
+DOMAIN,oneid.getui.net
+DOMAIN,aedns.weixin.qq.com
+DOMAIN,apd-pcdnwxlogin.teg.tencent-cloud.net
+DOMAIN,apd-pcdnwxnat.teg.tencent-cloud.net
+DOMAIN,apd-pcdnwxstat.teg.tencent-cloud.net
+DOMAIN,iuni.telecome.cn
+DOMAIN,jpush.cn
+DOMAIN,mssdk.volces.com.queniusz.com
+DOMAIN,sdkapi.cloooud.com
+DOMAIN,s.jpush.cn
+DOMAIN,sis-ipv6.jpush.cn
+DOMAIN,sis.jpush.io
+DOMAIN,status-ipv6.jpush.cn
+DOMAIN,tsis-ipv6.jpush.cn
+DOMAIN,tsis.jpush.cn
+DOMAIN,seeds-sina.xycdn.com
+DOMAIN-SUFFIX,wagbridge.alsc-prd.tanx.com
