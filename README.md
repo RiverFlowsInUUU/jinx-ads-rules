@@ -83,7 +83,9 @@ rule-providers:
     type: http
     behavior: classical          # ⚠️ 必须 classical, 不要用 domain
     format: text
+    # 二选一：国内优先 jsDelivr；拉不动 / 被墙时换 raw（注意 raw 在国内常不可达）
     url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads.list"
+    # url: "https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-ads.list"
     path: ./rule_provider/jinx-ads.list
     interval: 86400
 
@@ -92,6 +94,7 @@ rule-providers:
     behavior: classical
     format: text
     url: "https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list"
+    # url: "https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-white-guard.list"
     path: ./rule_provider/jinx-white-guard.list
     interval: 86400
 
@@ -118,6 +121,10 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-w
 # ② 广告拦截
 RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-ads.list,REJECT,pre-matching,extended-matching
 # ③ 你自己的规则接在后面
+
+# —— 备选：jsDelivr 拉不动时，把上面两条换成 raw ——
+# RULE-SET,https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-white-guard.list,DIRECT
+# RULE-SET,https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-ads.list,REJECT,pre-matching,extended-matching
 ```
 
 两个参数的作用：
@@ -156,7 +163,7 @@ RULE-SET,https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-a
 2. **超广通配**：源里有 `ad.*`、`ad-*`、`ads-*`、`pangolin*` 这类一条覆盖几百条的规则，拦截面积很大。某 App 出问题先怀疑它们。
 3. **中缀星号**：`p*-ad.adkwai.com` 只存在于带类型前缀的格式（mihomo `classical` / Surge `RULE-SET`）。这也是本仓库只提供这两种格式的原因。
 4. **jsDelivr 缓存**：更新后 CDN 有几分钟到几小时延迟。急用可在 URL 里加 `?v=<日期>` 绕缓存。
-5. **`raw.githubusercontent.com` 在国内常不可达**，优先用 jsDelivr。
+5. **地址二选一**：每个文件都提供 **jsDelivr** 与 **GitHub raw** 两种链接（见文末"文件清单"）。优先用 jsDelivr，理由是 `raw.githubusercontent.com` 在国内常不可达；只有在 jsDelivr 拉不动、或你需要"改动立刻生效"（raw 无 CDN 缓存延迟）时才换 raw，且注意 raw 需能直连 GitHub。
 6. **只做域名级拦截**：能拦 DNS 层面的广告域；**同域内嵌广告**（广告和内容同一个域名）需要 MITM/URL 级规则，本仓库的规则**做不到**。
 7. **`DOMAIN-SUFFIX` 覆盖面比 `DOMAIN` 大得多**：这是为了复刻 Jinx 的行为。若出现误杀，用白名单加回，而不是把语义改回精确。
 
@@ -229,6 +236,18 @@ python convert_ruleset.py --src ./jinx-rules --out ./out \
 
 ## 文件清单
 
+**两种地址前缀，二选一**，拼上文件名即为完整地址：
+
+| 源 | 前缀 | 说明 |
+|---|---|---|
+| **jsDelivr（推荐）** | `https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/` | 国内可直连、有 CDN 加速；更新后需等缓存刷新 |
+| **GitHub raw（备选）** | `https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/` | 内容永远最新、无缓存延迟；但**国内常不可达**，建议配合代理使用 |
+
+例：
+- `…/mihomo-ads.list` →
+  jsDelivr <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads.list> ｜
+  raw <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-ads.list>
+
 | 文件 | 条数 | 用途 | 状态 |
 |---|---:|---|---|
 | `mihomo-ads.list` | 3888 | mihomo `behavior: classical`，完整版 | ⭐ 推荐 |
@@ -237,6 +256,17 @@ python convert_ruleset.py --src ./jinx-rules --out ./out \
 | `surge-ads-delta.list` | 3835 | 同上，Surge | 可选 |
 | `mihomo-white-guard.list` | 42 | mihomo 白名单（精确放行） | ⭐ 建议 |
 | `surge-white-guard.list` | 42 | Surge 白名单（精确放行） | ⭐ 建议 |
+
+**完整地址一览**（上排 jsDelivr / 下排 raw，同文件任选其一）：
+
+| 文件 | jsDelivr | raw |
+|---|---|---|
+| `mihomo-ads.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-ads.list> |
+| `surge-ads.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-ads.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-ads.list> |
+| `mihomo-ads-delta.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-ads-delta.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-ads-delta.list> |
+| `surge-ads-delta.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-ads-delta.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-ads-delta.list> |
+| `mihomo-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-white-guard.list> |
+| `surge-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-white-guard.list> |
 
 > **仓库只保留以上 6 个规则文件。** 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
 > **如果你的客户端仍引用着这些旧地址，请立即换成本表上方的新文件名**——旧地址现已 404，会导致规则集拉取失败。
