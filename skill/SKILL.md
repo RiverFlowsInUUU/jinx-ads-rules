@@ -71,6 +71,10 @@ python convert_ruleset.py --src <源目录> --out <输出目录> \
 | `mihomo-<tag>-classical.list` | mihomo `behavior: classical` + `format: text`，**100% 保真** |
 | `surge-<tag>-ruleset.list` | Surge RULE-SET，**100% 保真** |
 
+**`--naming repo`（托管场景务必加）**：输出改为 `mihomo-<tag>.list` / `surge-<tag>.list`，即**与仓库现有文件名一致**，可直接覆盖上传、客户端 URL 一个字都不用改。不加则用上表的社区通用命名。
+
+> 命名对照（`--tag` 用 `ads` / `ads-delta` / `white-guard` 时）：`--naming repo` 产出的正是 `mihomo-ads.list`、`surge-ads-delta.list`、`mihomo-white-guard.list` 这类托管常用名。
+
 > 不再输出 `behavior: domain` / Surge `DOMAIN-SET` 变体：这两者既装不下中缀通配，普通条目的子域语义又依赖实现细节。3.9k 条量级下 RULE-SET 的性能损失可忽略。
 
 **再算差集**（用户已有其他广告列表时做，避免重复加载）。
@@ -151,14 +155,15 @@ python convert_ruleset.py --src <源目录> --out <输出目录> \
 
 ## 对外交付：必须写 README
 
-把规则文件托管成公开仓库时，**必须**附 `README.md`，否则使用者（包括未来的自己）无从下手。必备六块：
+把规则文件托管成公开仓库时，**必须**附 `README.md`，否则使用者（包括未来的自己）无从下手。必备七块：
 
 1. **来源与致谢 + 许可状态**：写清上游仓库链接、对应版本、上游是否声明 License（无声明就明确写"无，本仓库不主张许可"）。**绝不把转换产物的版权据为己有**，并给出下架渠道（"作者提 issue 即删"）。
 2. **选文件决策表**：按"你已有的规则集 / 客户端 / 保真 vs 性能"三档给结论，别让用户自己猜文件名。
 3. **可直接复制的配置片段**：每个客户端一段，含**规则顺序警告**和参数说明。
 4. **双地址**：每个文件同时给 jsDelivr 与 GitHub raw 两种 URL（见下"托管到公网"节）。
 5. **已知坑**：超广通配误杀、高性能格式丢中缀通配、CDN 缓存、顺序、参数限制。
-6. **重新生成方式**：给出命令，避免仓库变成"死快照"。
+6. **重新生成方式（含脚本本体）**：只给命令**不算可复现**——脚本必须**随仓库一起上传**（放 `skill/` 或 `tools/` 目录），README 里写全"clone 下来就能跑"的流程（取源文件 → 跑脚本 → 覆盖上传），并标注源文件在上游的准确路径。实测教训：README 里只写 `python convert_ruleset.py ...` 而仓库无此脚本，使用者第一行就报 `can't open file 'convert_ruleset.py'`。
+7. **告知可复现性是"已实测"的**：重跑一遍并与仓库现存文件做 `diff`，把结果写进 README（"逐字节一致"）。这既是给使用者的信心，也是自己下次改动时的回归基线。
 
 
 ## 托管到公网（Surge 必需）
