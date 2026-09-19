@@ -1,0 +1,24 @@
+# custom-ads.list —— 手工追加的广告域名（非上游 Jinx 来源）
+#
+# 用途：上游 Jinx 规则集没收录、但实测确有广告行为的域名，人工补在这里。
+# 合并方式：由 skill/scripts/convert_ruleset.py 的 --extra 参数读入，
+#           并入条目池末尾后再参与 delta 过滤，与上游条目同等对待。
+#
+# ⚠️ 只改本文件即可。不要手改 mihomo-*.list / surge-*.list ——
+#    那几个文件是生成产物，重跑一次转换就会被完全覆盖。
+#
+# 语法：一行一个域名，语义 = DOMAIN-SUFFIX（该域名 + 全部子域）。
+#
+# 现有条目与依据（2026-09-19 实测，来源：OpenClash 日志 + 第三方权威名单比对）
+#
+# msg.qy.net        爱奇艺视频广告素材 CNAME 出口（→ msg.video.dns.iqiyi.com）。
+#                   相机类 App「小鲸看看」冷启动时拉起，与被拦的 t7z.cupid.iqiyi.com 仅隔 75 ms。
+#                   收录于 anti-AD 与 1Hosts Lite。
+# rmonitor.qq.com   腾讯广告监控上报端点。收录于 anti-AD 与 1Hosts Lite。
+# rdelivery.qq.com  腾讯广告配置拉取服务（实测响应头 trpc.rdelivery.config_pull_server）。
+#                   收录于 1Hosts Lite。
+#                   注：217heidai 曾为修复「QQ浏览器-免费小说」将此域加白，若发现该 App 异常可优先回退本条。
+#
+msg.qy.net
+rmonitor.qq.com
+rdelivery.qq.com
