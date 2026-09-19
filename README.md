@@ -56,7 +56,7 @@ v2 同时修正了：
 | 有 AWAvenue | `mihomo-ads-delta.list` | `surge-ads-delta.list` |
 | **没有 / 不确定** | **`mihomo-ads.list`** ⭐ | **`surge-ads.list`** ⭐ |
 
-> 差集只比完整版少 **53 条**（3835 vs 3888），体积差异可以忽略。**除非你确定 AWAvenue 在跑，否则直接用完整版**——省得为 53 条规则埋一个"以为有人管、其实没人管"的坑。
+> 差集只比完整版少 **53 条**（3838 vs 3891），体积差异可以忽略。**除非你确定 AWAvenue 在跑，否则直接用完整版**——省得为 53 条规则埋一个"以为有人管、其实没人管"的坑。
 
 白名单（可选，强烈建议）：
 
@@ -66,11 +66,11 @@ v2 同时修正了：
 
 > 别直接引用上游全量 325 条白名单：里面含 `github.com`、`dns.google`、`dropbox.com`、`jsdelivr.net`、`icloud.com`，放在 REJECT 之前会把它们强制直连，国内环境属负优化。
 
-**规则组成**（完整版 3888 条）：
+**规则组成**（完整版 3891 条）：
 
 | 类型 | 条数 | 来源 |
 |---|---:|---|
-| `DOMAIN-SUFFIX` | 3670 | `blacklist.txt` 普通域名 → 后缀语义 |
+| `DOMAIN-SUFFIX` | 3673 | `blacklist.txt` 普通域名 → 后缀语义（其中 3 条来自 `custom-ads.list` 手工追加，见 §八） |
 | `DOMAIN-SUFFIX` | 66 | `blacklist_wildcard.txt` 前缀通配 `*.x.com` |
 | `DOMAIN-REGEX` / `DOMAIN-WILDCARD` | 149 | `blacklist_wildcard.txt` 含中缀星号（如 `p*-ad.adkwai.com`） |
 | `DOMAIN-SUFFIX` | 3 | 从 URL 脏数据还原的 host |
@@ -302,7 +302,7 @@ uci commit openclash
 | 路径 | 内容 |
 |---|---|
 | `skill/SKILL.md` | 完整方法论：匹配语义判定、三平台通配映射表、差集逻辑、白名单瘦身、托管规范、踩坑记录 |
-| `skill/scripts/convert_ruleset.py` | 转换主脚本（本仓库 6 个文件全部由它产出） |
+| `skill/scripts/convert_ruleset.py` | 转换主脚本（本仓库 6 个规则文件全部由它产出） |
 | `skill/scripts/upload_to_github.py` | 批量建库/上传辅助脚本（纯 GitHub API，无需 git / gh CLI） |
 
 **① 取源文件**（上游默认分支 `master`，文件在 `rules/` 下）
@@ -315,18 +315,20 @@ done
 cd ..
 ```
 
-**② 生成**（六条命令，产出全部 6 个文件）
+**② 生成**（六条命令，产出全部 6 个规则文件）
 
 ```bash
 SK=skill/scripts/convert_ruleset.py
 
 # 黑名单：完整版（suffix 语义）→ mihomo-ads.list / surge-ads.list
 python $SK --src ./jinx-rules --out ./out --fixed blacklist.txt --wild blacklist_wildcard.txt \
-    --tag ads --mode suffix --naming repo
+    --tag ads --mode suffix --naming repo \
+    --extra ./custom-ads.list
 
 # 黑名单：差集版 → mihomo-ads-delta.list / surge-ads-delta.list
 python $SK --src ./jinx-rules --out ./out --fixed blacklist.txt --wild blacklist_wildcard.txt \
     --tag ads-delta --mode suffix --naming repo \
+    --extra ./custom-ads.list \
     --delta-ref https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Clash-Classical.yaml
 
 # 白名单：精简 guard（exact 语义）→ mihomo-white-guard.list / surge-white-guard.list
@@ -337,7 +339,26 @@ python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist
 
 **`--naming repo` 是关键**：让输出文件名与仓库现有文件完全一致（`mihomo-ads.list` / `surge-ads.list`…），可直接覆盖上传，客户端 URL 不用改。省略它则输出社区通用命名 `mihomo-ads-classical.list` / `surge-ads-ruleset.list`。
 
-> ✅ **已实测**：用本节的命令从上游 3.1.9 重跑，产出的 `mihomo-ads.list` / `surge-ads.list` 与仓库现有文件**逐字节一致**（剔除注释行后 `diff` 为空，各 3888 条）。
+> ✅ **已实测**：用本节的命令从上游 3.1.9 重跑，产出的 6 个文件与仓库现有文件**逐字节一致**（剔除注释行后 `diff` 为空）。
+> 加入 `--extra ./custom-ads.list` 后，4 个黑名单文件各在**末尾**多出 3 条、表头多一行 `# extra:`，其余行序与内容**完全未变**；两个白名单文件保持字节一致。
+
+**自定义追加：`custom-ads.list`**
+
+上游 Jinx 没收录、但实测确有广告行为的域名，写进根目录的 `custom-ads.list`（一行一个，语义 `DOMAIN-SUFFIX` = 该域 + 全部子域），再用 `--extra` 并入。规律：
+
+- 合并发生在**条目池构建之后、`--delta-ref` 差集之前** → 追加项与上游条目**同等对待**（若已被 AWAvenue 覆盖，自然不会进差集版）
+- 追加项统一落在输出**末尾**，表头多一行 `# extra: custom-ads.list(N)` → **便于 diff 核验**
+- ⚠️ **不要手改 `mihomo-*.list` / `surge-*.list`** —— 它们是生成产物，重跑一次即被完全覆盖
+
+当前 `custom-ads.list` 共 3 条：
+
+| 域名 | 依据 |
+|---|---|
+| `msg.qy.net` | 爱奇艺视频广告素材出口（CNAME → `msg.video.dns.iqiyi.com`）；收录于 anti-AD、1Hosts Lite |
+| `rmonitor.qq.com` | 腾讯广告监控上报；收录于 anti-AD、1Hosts Lite |
+| `rdelivery.qq.com` | 腾讯广告配置拉取（实测响应头 `trpc.rdelivery.config_pull_server`）；收录于 1Hosts Lite。注：217heidai 曾为「QQ浏览器-免费小说」将其加白，若该 App 异常可优先回退本条 |
+
+这三条来自一次真实漏拦定位：相机 App「小鲸看看」冷启动时 `t7z.cupid.iqiyi.com`（爱奇艺广告 SDK）被拦，**75 ms 后** `msg.qy.net` 放行 —— 广告位能渲染，素材必然来自某个没被拦的域名。
 
 上游更新后的完整流程就是：重跑 → 覆盖仓库同名文件 → （如删过文件才需要）purge jsDelivr 缓存。
 
@@ -369,12 +390,14 @@ python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist
 
 | 文件 | 条数 | 用途 | 状态 |
 |---|---:|---|---|
-| `mihomo-ads.list` | 3888 | mihomo `behavior: classical`，完整版 | ⭐ 推荐 |
-| `surge-ads.list` | 3888 | Surge `RULE-SET`，完整版 | ⭐ 推荐 |
-| `mihomo-ads-delta.list` | 3835 | 已有 AWAvenue 时的差集版 | 可选 |
-| `surge-ads-delta.list` | 3835 | 同上，Surge | 可选 |
+| `mihomo-ads.list` | 3891 | mihomo `behavior: classical`，完整版 | ⭐ 推荐 |
+| `surge-ads.list` | 3891 | Surge `RULE-SET`，完整版 | ⭐ 推荐 |
+| `mihomo-ads-delta.list` | 3838 | 已有 AWAvenue 时的差集版 | 可选 |
+| `surge-ads-delta.list` | 3838 | 同上，Surge | 可选 |
 | `mihomo-white-guard.list` | 42 | mihomo 白名单（精确放行） | ⭐ 建议 |
 | `surge-white-guard.list` | 42 | Surge 白名单（精确放行） | ⭐ 建议 |
+
+> `custom-ads.list`（3 条）是**自定义追加的源文件**，由 `--extra` 合并进上面 4 个黑名单文件，**不要**把它当规则集直接引用。见 §八。
 
 **完整地址一览**（上排 jsDelivr / 下排 raw，同文件任选其一）：
 
@@ -387,7 +410,7 @@ python $SK --src ./jinx-rules --out ./out --fixed whitelist.txt --wild whitelist
 | `mihomo-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/mihomo-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/mihomo-white-guard.list> |
 | `surge-white-guard.list` | <https://cdn.jsdelivr.net/gh/RiverFlowsInUUU/jinx-ads-rules@main/surge-white-guard.list> | <https://raw.githubusercontent.com/RiverFlowsInUUU/jinx-ads-rules/main/surge-white-guard.list> |
 
-> **仓库结构**：根目录只保留以上 **6 个规则文件 + `README.md`**；另有 `skill/` 目录（转换脚本 + 方法论文档），**不参与规则引用**，见 §八。
+> **仓库结构**：根目录 = 上述 **6 个规则文件** + `custom-ads.list`（自定义追加源，**不作为规则直接引用**）+ `README.md`；另有 `skill/` 目录（转换脚本 + 方法论文档），**不参与规则引用**，见 §八。
 >
 > 早期版本的 `*-classical.list`、`*-ruleset.list`、`*-domain.list`、`*-domainset.txt` 等文件**已于 2026-09-19 全部删除**（语义有误或丢失中缀通配）。
 > **如果你的客户端仍引用着这些旧地址，请立即换成本表上方的新文件名**——旧地址现已 404，会导致规则集拉取失败。
