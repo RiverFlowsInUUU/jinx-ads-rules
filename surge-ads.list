@@ -1,7 +1,8 @@
 # auto-converted by adblock-ruleset-port
 # source: jinx-rules
 # mode: suffix
-# entries: 3888
+# entries: 3891
+# extra: custom-ads.list(3)
 DOMAIN-SUFFIX,1500020991.vodplayer.wxamedia.com
 DOMAIN-SUFFIX,1500022744.vodplayer.wxamedia.com
 DOMAIN-SUFFIX,1500026601.vodplayer.wxamedia.com
@@ -3890,3 +3891,6 @@ DOMAIN-WILDCARD,sf*-ttcdn-tos.pstatp.com
 DOMAIN-WILDCARD,p*-local-ads.byteimg.com.queniuso.com
 DOMAIN-WILDCARD,p*-local-ads.byteimg.com
 DOMAIN-WILDCARD,ads*-normal-lf.zijieapi.com.dhcp
+DOMAIN-SUFFIX,msg.qy.net
+DOMAIN-SUFFIX,rmonitor.qq.com
+DOMAIN-SUFFIX,rdelivery.qq.com
