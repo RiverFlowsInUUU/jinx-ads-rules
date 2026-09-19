@@ -17,6 +17,11 @@
   --mode suffix (默认) 普通条目 => DOMAIN-SUFFIX, 复刻 Jinx 等 DNS 过滤器的"域名+全部子域"语义
   --mode exact           普通条目 => DOMAIN, 仅精确匹配
 
+  # 自定义追加(让手工补的规则在上游更新后依然存活)
+  --extra ./custom-ads.list
+      把该文件里的域名并入条目池末尾, 再参与 guard/delta 过滤, 与上游条目同等对待。
+      上游没有、但你需要拦的域名请写在这里, 而不是手改 mihomo-*.list(重跑即被覆盖)。
+
   # 输出命名
   --naming classic (默认)  mihomo-<tag>-classical.list / surge-<tag>-ruleset.list
   --naming repo             mihomo-<tag>.list / surge-<tag>.list
@@ -173,6 +178,10 @@ def main():
     ap.add_argument('--mode', choices=['suffix', 'exact'], default='suffix',
                     help='普通条目的匹配语义; 黑名单用 suffix, 白名单用 exact')
     ap.add_argument('--delta-ref', help='现用规则集(URL 或本地路径), 给出则只输出差集')
+    ap.add_argument('--extra', nargs='*',
+                    help='手工追加的域名文件(相对 cwd, 或相对 --src 目录)。'
+                         '内容并入条目池末尾, 参与后续 guard/delta 过滤。'
+                         '用途: 让"自己补的规则"在上游更新、重新生成后依然存活')
     ap.add_argument('--guard-against-fixed', nargs='*', help='黑名单精确域名文件, 给出则只保留会被其误杀的白名单条目')
     ap.add_argument('--guard-against-wild', nargs='*', help='黑名单通配域名文件, 同上')
     args = ap.parse_args()
@@ -188,6 +197,24 @@ def main():
         p = src / name if src.is_dir() else pathlib.Path(name)
         entries.extend(load_entries(p))
     entries = dedup(entries)
+
+    extra_names = []
+    if args.extra:
+        added = []
+        for name in args.extra:
+            p = pathlib.Path(name)
+            if not p.exists() and src.is_dir() and (src / name).exists():
+                p = src / name
+            if not p.exists():
+                print('!! --extra 文件不存在, 已跳过: %s' % name)
+                continue
+            got = load_entries(p)
+            added.extend(got)
+            extra_names.append('%s(%d)' % (pathlib.Path(name).name, len(got)))
+        before = len(entries)
+        entries = dedup(entries + added)          # 追加项落在末尾, 便于 diff 校验
+        print('追加(--extra): %s, 新增 %d 条, 合计 %d 条'
+              % (', '.join(extra_names) or '(无)', len(entries) - before, len(entries)))
 
     if args.guard_against_fixed or args.guard_against_wild:
         def _abs(names):
@@ -242,6 +269,8 @@ def main():
     header = ('# auto-converted by adblock-ruleset-port\n'
               '# source: %s\n# mode: %s\n# entries: %d\n'
               % (args.src, args.mode, len(entries)))
+    if extra_names:
+        header += '# extra: %s\n' % ', '.join(extra_names)
     if args.naming == 'repo':
         names = ('mihomo-%s.list' % args.tag, 'surge-%s.list' % args.tag)
     else:
