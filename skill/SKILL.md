@@ -83,6 +83,33 @@ python convert_ruleset.py --src <源目录> --out <输出目录> \
 
 实测教训：AWAvenue `Clash-Classical` 949 条里 **936 条是 `DOMAIN,` 精确**、仅 12 条 SUFFIX。v1 按"精确命中即已覆盖"删掉了 874 条；改成"深度覆盖才算"后只该删 **53 条**。差集省下的量远小于风险，**不确定客户端是否真的加载了参照列表时，直接给完整版。**
 
+## 自定义追加（`--extra`）—— 上游没有、但你要拦的域名
+
+**动机**：上游规则集总有收录缺口（实测：相机 App 冷启动时 `msg.qy.net` 放行，广告素材照常渲染）。补规则时如果直接手改 `mihomo-*.list`，**下次从上游重跑就被完全覆盖**，而且不会有任何提示。
+
+做法：把追加域名单独放一个文件（托管仓库里叫 `custom-ads.list`），生成时用 `--extra` 并进去：
+
+```bash
+python convert_ruleset.py --src <源目录> --out <输出目录> \
+    --fixed blacklist.txt --wild blacklist_wildcard.txt --tag ads --mode suffix --naming repo \
+    --extra ./custom-ads.list          # ← 差集版那条命令也要带
+```
+
+语义与位置约定：
+
+| 项 | 行为 |
+|---|---|
+| 合并时机 | **条目池构建之后、guard / `--delta-ref` 过滤之前** → 追加项与上游条目同等对待 |
+| 落点 | 输出**末尾**（`entries + added` 的 dedup 顺序），便于 diff 核验 |
+| 表头 | 多一行 `# extra: custom-ads.list(N)`，N = 该文件读入条数 |
+| 路径解析 | 先按 cwd 找；找不到再按 `--src` 目录找（`--extra custom-ads.list` 与 `--extra ./custom-ads.list` 都可用） |
+| 语义 | 普通域名 → `DOMAIN-SUFFIX`（该域 + 全部子域），与黑名单一致 |
+
+**验收判据（必做，防止静默漂移）**：重新生成后与线上文件对 diff，**只允许三处变化** —— 表头 `# entries` 数字、多一行 `# extra:`、末尾按顺序多出 N 条；其余正文**逐行不变**。
+
+⚠️ **别因为"追加快、不用改配置"就滥用**：只加**被第三方权威名单收录**的域名。判定方式见 skill `openclash-config-change` 的 `scripts/scan_leaks.py`。
+⚠️ `--extra` 是 `nargs='*'`：**必须放在命令末尾**，或后面紧跟另一个 `--选项`；否则会把后面的位置参数当成文件名吞掉。
+
 ## 引用配置
 
 **mihomo / OpenClash**
