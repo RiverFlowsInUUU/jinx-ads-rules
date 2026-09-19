@@ -209,6 +209,24 @@ Surge 只能引用 **URL 或本地文件**；mihomo 可用本地文件。用 `sc
 python upload_to_github.py --token <PAT> --repo jinx-ads-rules --files a.list b.list
 ```
 
+**仓库已存在、只想增量更新（含 `skill/` 等子目录）时用 `scripts/upload_repo.py`**：
+
+```bash
+python upload_repo.py --token <PAT> --repo <owner>/<name> --message "..." \
+    --map custom-ads.list:custom-ads.list \
+          _regen/mihomo-ads-delta.list:mihomo-ads-delta.list \
+          README.md:README.md \
+          /abs/path/convert_ruleset.py:skill/scripts/convert_ruleset.py
+```
+
+比 `upload_to_github.py` 多三件事：① 支持 `本地路径:仓库内路径` 映射，可写子目录（后者只能传到根目录）；② 上传后**自动回拉并比对 md5**，避免"以为传上去了"；③ 网络抖动重试。
+⚠️ 映射用 `rpartition(':')` 切分，**不能**用 `partition` —— Windows 路径 `C:/...` 自带盘符冒号，会切到 `C`。
+
+**上传后如何确认生效（重要，别被 CDN 骗）**：
+- `raw.githubusercontent.com` 背后是 CDN，**更新后数分钟内可能仍返回旧内容**，且 `?cb=<随机>` cache-buster 在 raw 上**不可靠**。实测同一批上传，4 个文件里 1 个已是新的、3 个仍是旧的。
+- **权威判据 = GitHub Contents API**（直读 git 对象，不过 CDN）：`GET /repos/<owner>/<repo>/contents/<path>?ref=main` → base64 解码 → 比对本地 md5 + 打印末 3 行。
+- jsDelivr 同理更慢，必要时 purge（见下）。
+
 - **Token 最小权限**：classic 只勾 `public_repo` 即可（能建公开仓库+传文件，动不了私有代码）；fine-grained 需 Contents(read/write) + Administration(read/write)。
 - **仓库必须 public**：私有仓库的 raw 地址要认证，Surge 拉不到。
 - **引用优先 jsDelivr 镜像**：`https://cdn.jsdelivr.net/gh/<user>/<repo>@main/<file>`。`raw.githubusercontent.com` 国内常被墙；jsDelivr 有 CDN 缓存，但更新后有几分钟延迟。
