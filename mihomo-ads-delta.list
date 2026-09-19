@@ -1,7 +1,8 @@
 # auto-converted by adblock-ruleset-port
 # source: jinx-rules
 # mode: suffix
-# entries: 3835
+# entries: 3838
+# extra: custom-ads.list(3)
 DOMAIN-SUFFIX,1500020991.vodplayer.wxamedia.com
 DOMAIN-SUFFIX,1500022744.vodplayer.wxamedia.com
 DOMAIN-SUFFIX,1500026601.vodplayer.wxamedia.com
@@ -3837,3 +3838,6 @@ DOMAIN-REGEX,^sf.*\-ttcdn\-tos\.pstatp\.com$
 DOMAIN-REGEX,^p.*\-local\-ads\.byteimg\.com\.queniuso\.com$
 DOMAIN-REGEX,^p.*\-local\-ads\.byteimg\.com$
 DOMAIN-REGEX,^ads.*\-normal\-lf\.zijieapi\.com\.dhcp$
+DOMAIN-SUFFIX,msg.qy.net
+DOMAIN-SUFFIX,rmonitor.qq.com
+DOMAIN-SUFFIX,rdelivery.qq.com
